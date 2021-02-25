@@ -1,11 +1,6 @@
 //! Defines the sensor context.
 
-use crate::{
-    common::*,
-    device_hub::DeviceHub,
-    device_list::DeviceList,
-    error::{ErrorChecker, Result},
-};
+use crate::{base::os_str_to_cstring, common::*, device_hub::DeviceHub, device_list::DeviceList, error::{ErrorChecker, Result}};
 
 #[derive(Debug)]
 pub struct Context {
@@ -72,7 +67,7 @@ impl Context {
     where
         P: AsRef<Path>,
     {
-        let cstring = CString::new(file.as_ref().as_os_str().as_bytes()).unwrap();
+        let cstring = os_str_to_cstring(file.as_ref().as_os_str());
         unsafe {
             let mut checker = ErrorChecker::new();
             sys::rs2_context_add_device(
