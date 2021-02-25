@@ -1,5 +1,7 @@
 //! Common types and functions.
 
+use std::ffi::OsStr;
+
 use crate::{
     common::*,
     error::{Error, Result},
@@ -56,6 +58,19 @@ impl<'a> TryIntoCowCStr<'a> for &str {
         })?;
         let cstring = CString::from(bytes);
         Ok(cstring.into())
+    }
+}
+
+/// Converts an `OsStr` to a CString.
+pub fn os_str_to_cstring(s: &OsStr) -> CString {
+    #[cfg(unix)]
+    {
+        CString::new(s.as_bytes()).unwrap()
+    }
+
+    #[cfg(windows)]
+    {
+        CString::new(s.to_str().unwrap().as_bytes()).unwrap()
     }
 }
 
