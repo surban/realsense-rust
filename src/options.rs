@@ -27,18 +27,23 @@ pub trait ToOptions {
             };
 
             let handles = (0..len)
-                .map(|index| {
+                .filter_map(|index| {
                     let mut checker = ErrorChecker::new();
                     let val =
                         sys::rs2_get_option_from_list(list_ptr, index, checker.inner_mut_ptr());
-                    checker.check()?;
-                    let option = Rs2Option::from_u32(val).unwrap();
+                    if let Err(err) = checker.check() {
+                        return Some(Err(err));
+                    }
+                    let option = match Rs2Option::from_u32(val) {
+                        Some(option) => option,
+                        None => return None
+                    };
                     let handle = OptionHandle {
                         ptr: options_ptr,
                         option,
                     };
 
-                    Result::Ok((option, handle))
+                    Some(Result::Ok((option, handle)))
                 })
                 .collect::<Result<HashMap<_, _>>>()?;
             Ok(handles)
