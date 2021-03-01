@@ -62,7 +62,7 @@ impl<'a> TryIntoCowCStr<'a> for &str {
 }
 
 /// Converts an `OsStr` to a CString.
-pub fn os_str_to_cstring(s: &OsStr) ->  CString {
+pub fn os_str_to_cstring(s: &OsStr) -> CString {
     #[cfg(unix)]
     {
         CString::new(s.as_bytes()).unwrap()

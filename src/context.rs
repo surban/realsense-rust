@@ -1,6 +1,12 @@
 //! Defines the sensor context.
 
-use crate::{base::os_str_to_cstring, common::*, device_hub::DeviceHub, device_list::DeviceList, error::{ErrorChecker, Result}};
+use crate::{
+    base::os_str_to_cstring,
+    common::*,
+    device_hub::DeviceHub,
+    device_list::DeviceList,
+    error::{ErrorChecker, Result},
+};
 
 #[derive(Debug)]
 pub struct Context {

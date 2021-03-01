@@ -5,7 +5,8 @@ fn main() {
         return;
     }
 
-    let cargo_manifest_dir: PathBuf = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let cargo_manifest_dir: PathBuf =
+        PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
 
     // Probe libary
     let library;
@@ -13,18 +14,23 @@ fn main() {
     {
         library = pkg_config::probe_library("realsense2")
             .expect("pkg-config failed to find realsense2 package");
-        let major_version = library.version.find('.')
+        let major_version = library
+            .version
+            .find('.')
             .map(|i| &library.version[..i])
             .expect("failed to determine librealsense major version");
 
         if major_version != "2" {
-            panic!("librealsense2 version {} is not supported, expected major version 2", library.version)
+            panic!(
+                "librealsense2 version {} is not supported, expected major version 2",
+                library.version
+            )
         }
     }
     #[cfg(windows)]
     {
-        library = vcpkg::find_package("realsense2")
-            .expect("vcpkg failed to find realsense2 package");
+        library =
+            vcpkg::find_package("realsense2").expect("vcpkg failed to find realsense2 package");
     }
 
     // generate bindings
@@ -83,7 +89,11 @@ fn main() {
         let bindings_file = bindings_dir.join("bindings.rs");
 
         if let Err(e) = std::fs::create_dir_all(&bindings_dir) {
-            panic!("failed to create directory {}: {}", bindings_dir.display(), e);
+            panic!(
+                "failed to create directory {}: {}",
+                bindings_dir.display(),
+                e
+            );
         }
         bindings
             .write_to_file(bindings_file)

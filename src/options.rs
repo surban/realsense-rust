@@ -36,7 +36,7 @@ pub trait ToOptions {
                     }
                     let option = match Rs2Option::from_u32(val) {
                         Some(option) => option,
-                        None => return None
+                        None => return None,
                     };
                     let handle = OptionHandle {
                         ptr: options_ptr,
