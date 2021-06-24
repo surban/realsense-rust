@@ -1,59 +1,174 @@
-//! Defines the profile type of streams.
+//! Types for representing data related to streams
+//!
+//! In librealsense2, a stream is an abstraction around a "sensor stream." In most applications,
+//! every sensor in the API will probably only have one stream that you actively care about (but
+//! not always!). That stream is tied to both the sensor it is configured on as well as the frames
+//! that are produced from the stream. The stream contains metadata such as the stream kind, the
+//! format of the incoming data, etc.
+//!
+//! There are two ways you can get streams in the system: from a stream profile list returned from
+//! the `Sensor`, or the frame stream from a frame type. In both cases the stream profile has an
+//! explicit lifetime that depends on the object you obtained it from. This is because stream
+//! profile ownership is not the same depending on how you obtained it.
+//!
+//! # Things to watch out for
+//!
+//! Extrinsics and intrinsics between different streams are obtained via the stream profile.
+//! However, your stream profile may not be valid if you get it from the frame. This is because
+//! stream profiles for the frame at a low level are owned by librealsense2. Calls to
+//! `rs2_get_frame_stream_profile` return a `*const rs2_stream_profile`, which is obtained by
+//! a call to C++ `shared_ptr::get()` internally to librealsense2. Since this is owned and managed
+//! by librealsense2, and calls to `shared_ptr::get()` aren't tracked by the internal ref-count on
+//! the `shared_ptr`, this means that the pointer could be invalidated at any time. In practice,
+//! this means that if you disconnect your device mid-way through streaming (i.e. yank the cable
+//! out), you could be holding onto a `StreamProfile` with an invalid internal pointer.
+//!
+//! We attempt to cache some aspects of the stream profile ahead of time, but in some cases this is
+//! not feasible (e.g. extrinsics). This is why some interfaces return `Result`s and others do not.
+//! The interfaces that do not return `Result` types are cached or otherwise safe-to-assume as
+//! such. The ones that do return `Result` types are will check the pointer at runtime and may
+//! return an error if it is no longer valid.
+//!
+//! We recommend that you get extrinsic or intrinsic information ahead of time when the device is
+//! connected (via `Device::sensor()` and then `Sensor::stream_profiles()`), rather than relying on
+//! the stream profile obtained via the frame types. The streams will have the same unique
+//! identifier if they correspond to the same stream.
+//!
+//! See [the `StreamProfile` type](crate::stream_profile::StreamProfile) for more information.
+//!
 
 use crate::{
-    base::{Extrinsics, Intrinsics, MotionIntrinsics, Resolution, StreamProfileData},
-    common::*,
-    error::{ErrorChecker, Result},
-    kind::{Format, StreamKind},
-    stream_profile_kind,
+    base::{Rs2Extrinsics, Rs2Intrinsics, Rs2MotionDeviceIntrinsics},
+    check_rs2_error,
+    kind::{Rs2Exception, Rs2Format, Rs2StreamKind},
 };
+use anyhow::Result;
+use num_traits::FromPrimitive;
+use realsense_sys as sys;
+use std::{convert::TryFrom, mem::MaybeUninit, ptr::NonNull};
+use thiserror::Error;
 
-/// The enumeration of extended stream profile type returned by [StreamProfile::try_extend](StreamProfile::try_extend).
-#[derive(Debug)]
-pub enum ExtendedStreamProfile {
-    Video(VideoStreamProfile),
-    Motion(MotionStreamProfile),
-    Pose(PoseStreamProfile),
-    Other(AnyStreamProfile),
+/// Type describing errors that can occur when trying to construct a stream profile.
+///
+/// Follows the standard pattern of errors where the enum variant describes what the low-level code
+/// was attempting to do while the string carried alongside describes the underlying error message
+/// from any C++ exceptions that occur.
+#[derive(Error, Debug)]
+pub enum StreamConstructionError {
+    /// Could not get stream data during construction.
+    #[error("Could not retrieve stream data. Type: {0}; Reason: {1}")]
+    CouldNotRetrieveStreamData(Rs2Exception, String),
+    /// Could not determine if this stream is the default stream during construction.
+    #[error("Could not determine if this is the default stream. Type: {0}; Reason: {1}")]
+    CouldNotDetermineIsDefault(Rs2Exception, String),
+    /// Could not get the stream profile from the stream profile list.
+    ///
+    /// Usually due to an internal exception of some kind.
+    #[error("Could not get the stream profile from a stream profile list. Type: {0}; Reason: {1}")]
+    CouldNotGetProfileFromList(Rs2Exception, String),
+    /// Could not clone the stream profile after acquiring it from the profile list.
+    #[error("Could not clone the stream profile after getting it from the profile list. Type: {0}; Reason: {1}")]
+    CouldNotCloneProfile(Rs2Exception, String),
 }
 
-/// The profile of stream.
+/// Type describing errors in getting or setting stream-related data.
+///
+/// Follows the standard pattern of errors where the enum variant describes what the low-level code
+/// was attempting to do while the string carried alongside describes the underlying error message
+/// from any C++ exceptions that occur.
+#[derive(Error, Debug)]
+pub enum DataError {
+    /// Could not get extrinsics between the requested streams.
+    #[error("Could not get extrinsics. Type: {0}; Reason: {1}")]
+    CouldNotGetExtrinsics(Rs2Exception, String),
+    /// Could not set extrinsics between the requested streams.
+    #[error("Could not set extrinsics. Type: {0}; Reason: {1}")]
+    CouldNotSetExtrinsics(Rs2Exception, String),
+    /// This stream does not have video intrinsics.
+    #[error("Stream does not have video intrinsics")]
+    StreamDoesNotHaveVideoIntrinsics,
+    /// This stream does not have motion intrinsics.
+    #[error("Stream does not have motion intrinsics")]
+    StreamDoesNotHaveMotionIntrinsics,
+    /// Could not get video intrinsics from the requested stream.
+    #[error("Could not get video intrinsics. Type: {0}; Reason: {1}")]
+    CouldNotGetIntrinsics(Rs2Exception, String),
+    /// Could not get motion intrinsics from the requested stream.
+    #[error("Could not get motion intrinsics. Type: {0}; Reason: {1}")]
+    CouldNotGetMotionIntrinsics(Rs2Exception, String),
+}
+
+/// Type for holding the stream profile information.
+///
+/// This type exists as a high-level wrapper around an underlying `rs2_stream_profile` pointer. On
+/// construction, we cache a copy of the stream data and also cache whether or not this stream
+/// profile is the default stream for a sensor.
+///
+/// # Lifetimes
+///
+/// Stream profiles are acquired one of three ways:
+///
+/// 1. The stream profile list via the [`stream_profiles`](crate::sensor::Sensor::stream_profiles))
+///    method on the [`Sensor`](crate::sensor::Sensor) type.
+/// 2. The stream profile list via the
+///    [`streams`](crate::pipeline::profile::PipelineProfile::streams) associated function on the
+///    [`PipelineProfile`](crate::pipeline::profile::PipelineProfile) type.
+/// 3. The frame-specific `frame_stream_profile` member via the Frame type.
+///
+/// Stream profiles from the sensor can outlive the parent object that you obtain them from. In
+/// cases two and three above we return references to a stream profile owned by that type, so they
+/// may not.  In most cases you will probably want to grab the stream profile from the pipeline
+/// profile, which will give you all streams that are actively streaming from a given pipeline.
+///
 #[derive(Debug)]
-pub struct StreamProfile<Kind>
-where
-    Kind: stream_profile_kind::StreamProfileKind,
-{
+pub struct StreamProfile {
+    // Underlying non-null pointer from realsense-sys.
+    //
+    // Unlike many other pointer types that we get from the ffi boundary, this pointer should not
+    // be manually deleted using `rs2_delete_stream_profile`. Streams are owned and managed by
+    // their corresponding sensor, which are owned and managed by their corresponding devices.
+    // Stream profile pointers should only be manually deleted if they are created by
+
+    // `rs2_clone_stream_profile`, which we do not use in the high-level API.
     ptr: NonNull<sys::rs2_stream_profile>,
-    from_clone: bool,
-    _phantom: PhantomData<Kind>,
+    // The kind of stream (e.g. depth, video, accelerometer, gyroscope, etc.)
+    stream: Rs2StreamKind,
+    // The bit format of the underlying data.
+    //
+    // For video streams this will describe how the pixels are packed and padded, for motion,
+    // pose, and point frame streams this will describe how to deconstruct individual points or
+    // observations.
+    format: Rs2Format,
+    // The stream index. Useful if you wish to enable / disable certain streams by index.
+    index: usize,
+    // The unique identifier for the stream.
+    unique_id: i32,
+    // The framerate of the stream (how fast it outputs data)
+    framerate: i32,
+    // Whether or not the stream is a default stream.
+    is_default: bool,
+    // Whether or not to drop the profile
+    should_drop: bool,
 }
 
-// type aliases
+impl TryFrom<NonNull<sys::rs2_stream_profile>> for StreamProfile {
+    type Error = StreamConstructionError;
 
-pub type VideoStreamProfile = StreamProfile<stream_profile_kind::Video>;
-pub type MotionStreamProfile = StreamProfile<stream_profile_kind::Motion>;
-pub type PoseStreamProfile = StreamProfile<stream_profile_kind::Pose>;
-pub type AnyStreamProfile = StreamProfile<stream_profile_kind::Any>;
-
-impl<Kind> StreamProfile<Kind>
-where
-    Kind: stream_profile_kind::StreamProfileKind,
-{
-    /// Check whether the profile is default or not.
-    pub fn is_default(&self) -> Result<bool> {
+    /// Attempt to create a stream profile from a pointer to an `rs2_stream_profile` type.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StreamConstructionError::CouldNotRetrieveStreamData`] if the stream data
+    /// associated with this stream profile cannot be retrieved.
+    ///
+    /// Returns [`StreamConstructionError::CouldNotDetermineIsDefault`] if it cannot be determined
+    /// whether or not this stream is a default stream. This usually will only happen if the stream
+    /// is invalidated (e.g. due to a device disconnect) when you try to construct it.
+    ///
+    fn try_from(stream_profile_ptr: NonNull<sys::rs2_stream_profile>) -> Result<Self, Self::Error> {
         unsafe {
-            let mut checker = ErrorChecker::new();
-            let val =
-                sys::rs2_is_stream_profile_default(self.ptr.as_ptr(), checker.inner_mut_ptr());
-            checker.check()?;
-            Ok(val != 0)
-        }
-    }
+            let mut err = std::ptr::null_mut::<sys::rs2_error>();
 
-    /// Gets the attributes of stream.
-    pub fn get_data(&self) -> Result<StreamProfileData> {
-        unsafe {
-            let mut checker = ErrorChecker::new();
             let mut stream = MaybeUninit::uninit();
             let mut format = MaybeUninit::uninit();
             let mut index = MaybeUninit::uninit();
@@ -61,213 +176,271 @@ where
             let mut framerate = MaybeUninit::uninit();
 
             sys::rs2_get_stream_profile_data(
-                self.ptr.as_ptr(),
+                stream_profile_ptr.as_ptr(),
                 stream.as_mut_ptr(),
                 format.as_mut_ptr(),
                 index.as_mut_ptr(),
                 unique_id.as_mut_ptr(),
                 framerate.as_mut_ptr(),
-                checker.inner_mut_ptr(),
+                &mut err,
             );
-            checker.check()?;
+            check_rs2_error!(err, StreamConstructionError::CouldNotRetrieveStreamData)?;
 
-            let data = StreamProfileData {
-                stream: StreamKind::from_u32(stream.assume_init()).unwrap(),
-                format: Format::from_u32(format.assume_init()).unwrap(),
+            let is_default =
+                sys::rs2_is_stream_profile_default(stream_profile_ptr.as_ptr(), &mut err);
+            check_rs2_error!(err, StreamConstructionError::CouldNotDetermineIsDefault)?;
+
+            Ok(StreamProfile {
+                ptr: stream_profile_ptr,
+                stream: Rs2StreamKind::from_i32(stream.assume_init() as i32).unwrap(),
+                format: Rs2Format::from_i32(format.assume_init() as i32).unwrap(),
                 index: index.assume_init() as usize,
                 unique_id: unique_id.assume_init(),
                 framerate: framerate.assume_init(),
-            };
-            Ok(data)
-        }
-    }
-
-    // /// Sets the attributes of stream.
-    // pub fn set_data(&mut self) {
-    //     todo!();
-    // }
-
-    /// Gets the extrinsic parameters to another stream.
-    pub fn get_extrinsics<P, K>(&self, to_stream: P) -> Result<Extrinsics>
-    where
-        P: Borrow<StreamProfile<K>>,
-        K: stream_profile_kind::StreamProfileKind,
-    {
-        unsafe {
-            let mut extrinsics = MaybeUninit::<sys::rs2_extrinsics>::uninit();
-            let mut checker = ErrorChecker::new();
-            sys::rs2_get_extrinsics(
-                self.ptr.as_ptr(),
-                to_stream.borrow().ptr.as_ptr(),
-                extrinsics.as_mut_ptr(),
-                checker.inner_mut_ptr(),
-            );
-            checker.check()?;
-            Ok(Extrinsics(extrinsics.assume_init()))
-        }
-    }
-
-    /// Sets the extrinsic parameters to another stream.
-    pub fn set_extrinsics<P, K>(&self, to_stream: P, extrinsics: Extrinsics) -> Result<()>
-    where
-        P: Borrow<StreamProfile<K>>,
-        K: stream_profile_kind::StreamProfileKind,
-    {
-        unsafe {
-            let mut checker = ErrorChecker::new();
-            sys::rs2_register_extrinsics(
-                self.ptr.as_ptr(),
-                to_stream.borrow().ptr.as_ptr(),
-                *extrinsics,
-                checker.inner_mut_ptr(),
-            );
-            checker.check()?;
-            Ok(())
-        }
-    }
-
-    pub fn into_raw_parts(self) -> (*mut sys::rs2_stream_profile, bool) {
-        let ptr = self.ptr;
-        let from_clone = self.from_clone;
-        mem::forget(self);
-        (ptr.as_ptr(), from_clone)
-    }
-
-    pub unsafe fn from_raw_parts(ptr: *mut sys::rs2_stream_profile, from_clone: bool) -> Self {
-        Self {
-            ptr: NonNull::new(ptr).unwrap(),
-            from_clone,
-            _phantom: PhantomData,
+                is_default: is_default != 0,
+                should_drop: false,
+            })
         }
     }
 }
 
-impl AnyStreamProfile {
-    /// Check if the stream is extendable to the given extension.
-    pub fn is_extendable_to<Kind>(&self) -> Result<bool>
-    where
-        Kind: stream_profile_kind::NonAnyStreamProfileKind,
-    {
-        unsafe {
-            let mut checker = ErrorChecker::new();
-            let val = sys::rs2_stream_profile_is(
-                self.ptr.as_ptr(),
-                Kind::EXTENSION as sys::rs2_extension,
-                checker.inner_mut_ptr(),
-            );
-            checker.check()?;
-            Ok(val != 0)
-        }
-    }
-
-    /// Extends to a specific stream profile subtype.
-    pub fn try_extend_to<Kind>(self) -> Result<result::Result<StreamProfile<Kind>, Self>>
-    where
-        Kind: stream_profile_kind::NonAnyStreamProfileKind,
-    {
-        if self.is_extendable_to::<Kind>()? {
-            let (ptr, from_clone) = self.into_raw_parts();
-            let profile = StreamProfile {
-                ptr: NonNull::new(ptr).unwrap(),
-                from_clone,
-                _phantom: PhantomData,
-            };
-            Ok(Ok(profile))
-        } else {
-            Ok(Err(self))
-        }
-    }
-
-    /// Extends to one of a stream profile subtype.
-    pub fn try_extend(self) -> Result<ExtendedStreamProfile> {
-        let profile_any = self;
-
-        let profile_any = match profile_any.try_extend_to::<stream_profile_kind::Video>()? {
-            Ok(profile) => return Ok(ExtendedStreamProfile::Video(profile)),
-            Err(profile) => profile,
-        };
-
-        let profile_any = match profile_any.try_extend_to::<stream_profile_kind::Motion>()? {
-            Ok(profile) => return Ok(ExtendedStreamProfile::Motion(profile)),
-            Err(profile) => profile,
-        };
-
-        let profile_any = match profile_any.try_extend_to::<stream_profile_kind::Pose>()? {
-            Ok(profile) => return Ok(ExtendedStreamProfile::Pose(profile)),
-            Err(profile) => profile,
-        };
-
-        Ok(ExtendedStreamProfile::Other(profile_any))
-    }
-}
-
-impl VideoStreamProfile {
-    /// Gets the resolution of stream.
-    pub fn resolution(&self) -> Result<Resolution> {
-        let mut width = MaybeUninit::uninit();
-        let mut height = MaybeUninit::uninit();
-        let resolution = unsafe {
-            let mut checker = ErrorChecker::new();
-            sys::rs2_get_video_stream_resolution(
-                self.ptr.as_ptr(),
-                width.as_mut_ptr(),
-                height.as_mut_ptr(),
-                checker.inner_mut_ptr(),
-            );
-            checker.check()?;
-
-            Resolution {
-                width: width.assume_init() as usize,
-                height: height.assume_init() as usize,
-            }
-        };
-        Ok(resolution)
-    }
-
-    /// Gets the intrinsic parameters.
-    pub fn intrinsics(&self) -> Result<Intrinsics> {
-        unsafe {
-            let mut checker = ErrorChecker::new();
-            let mut intrinsics = MaybeUninit::<sys::rs2_intrinsics>::uninit();
-            sys::rs2_get_video_stream_intrinsics(
-                self.ptr.as_ptr(),
-                intrinsics.as_mut_ptr(),
-                checker.inner_mut_ptr(),
-            );
-            checker.check()?;
-            Ok(Intrinsics(intrinsics.assume_init()))
-        }
-    }
-}
-
-impl MotionStreamProfile {
-    /// Gets the motion intrinsic parameters.
-    pub fn motion_intrinsics(&self) -> Result<MotionIntrinsics> {
-        unsafe {
-            let mut checker = ErrorChecker::new();
-            let mut intrinsics = MaybeUninit::<sys::rs2_motion_device_intrinsic>::uninit();
-            sys::rs2_get_motion_intrinsics(
-                self.ptr.as_ptr(),
-                intrinsics.as_mut_ptr(),
-                checker.inner_mut_ptr(),
-            );
-            checker.check()?;
-            Ok(MotionIntrinsics(intrinsics.assume_init()))
-        }
-    }
-}
-
-impl<Kind> Drop for StreamProfile<Kind>
-where
-    Kind: stream_profile_kind::StreamProfileKind,
-{
+impl Drop for StreamProfile {
     fn drop(&mut self) {
         unsafe {
-            if self.from_clone {
+            if self.should_drop {
                 sys::rs2_delete_stream_profile(self.ptr.as_ptr());
             }
         }
     }
 }
 
-unsafe impl<Kind> Send for StreamProfile<Kind> where Kind: stream_profile_kind::StreamProfileKind {}
+impl StreamProfile {
+    /// Attempt to construct a stream profile from a profile list and index.
+    ///
+    /// Constructs a new stream profile from the list and index, or returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StreamConstructionError::CouldNotGetProfileFromList`] if the stream profile
+    /// cannot be acquired from the profile list. (e.g. index is invalid).
+    ///
+    /// Returns [`StreamConstructionError::CouldNotRetrieveStreamData`] if the stream data
+    /// associated with this stream profile cannot be retrieved.
+    ///
+    /// Returns [`StreamConstructionError::CouldNotDetermineIsDefault`] if it cannot be determined
+    /// whether or not this stream is a default stream. This usually will only happen if the stream
+    /// is invalidated (e.g. due to a device disconnect) when you try to construct it.
+    ///
+    pub(crate) fn try_create(
+        profiles: &NonNull<sys::rs2_stream_profile_list>,
+        index: i32,
+    ) -> Result<Self, StreamConstructionError> {
+        unsafe {
+            let mut err = std::ptr::null_mut::<sys::rs2_error>();
+            let profile_ptr = sys::rs2_get_stream_profile(profiles.as_ptr(), index, &mut err);
+            check_rs2_error!(err, StreamConstructionError::CouldNotGetProfileFromList)?;
+
+            let mut stream = MaybeUninit::uninit();
+            let mut format = MaybeUninit::uninit();
+            let mut index = MaybeUninit::uninit();
+            let mut unique_id = MaybeUninit::uninit();
+            let mut framerate = MaybeUninit::uninit();
+
+            sys::rs2_get_stream_profile_data(
+                profile_ptr,
+                stream.as_mut_ptr(),
+                format.as_mut_ptr(),
+                index.as_mut_ptr(),
+                unique_id.as_mut_ptr(),
+                framerate.as_mut_ptr(),
+                &mut err,
+            );
+            check_rs2_error!(err, StreamConstructionError::CouldNotRetrieveStreamData)?;
+
+            let profile_ptr = sys::rs2_clone_stream_profile(
+                profile_ptr,
+                stream.assume_init(),
+                index.assume_init(),
+                format.assume_init(),
+                &mut err,
+            );
+            check_rs2_error!(err, StreamConstructionError::CouldNotCloneProfile)?;
+
+            let nonnull_profile_ptr =
+                NonNull::new(profile_ptr as *mut sys::rs2_stream_profile).unwrap();
+            let mut stream_profile = Self::try_from(nonnull_profile_ptr)?;
+            stream_profile.should_drop = true;
+
+            Ok(stream_profile)
+        }
+    }
+
+    /// Predicate for whether or not the stream is a default stream.
+    #[inline]
+    pub fn is_default(&self) -> bool {
+        self.is_default
+    }
+
+    /// Gets the stream kind from the stream data.
+    ///
+    /// This can be e.g. Depth, Video, Accel, Gyro, etc.
+    #[inline]
+    pub fn kind(&self) -> Rs2StreamKind {
+        self.stream
+    }
+
+    /// Gets the format for the underlying data.
+    ///
+    /// For video streams this will describe how the pixels are packed and padded, for motion,
+    /// pose, and point frame streams this will describe how to deconstruct individual points or
+    /// observations.
+    #[inline]
+    pub fn format(&self) -> Rs2Format {
+        self.format
+    }
+
+    /// Gets the stream's index.
+    ///
+    /// This is useful if you want to enable / disable a particular stream according to its index.
+    #[inline]
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Gets the stream's unique identifier.
+    #[inline]
+    pub fn unique_id(&self) -> i32 {
+        self.unique_id
+    }
+
+    /// Gets the framerate / data rate of frames generated by the stream.
+    #[inline]
+    pub fn framerate(&self) -> i32 {
+        self.framerate
+    }
+
+    /// Get extrinsics between the origin stream (`self`) and target stream (`to_profile`).
+    ///
+    /// Returns the extrinsics between the origin and target streams from the underlying realsense
+    /// driver iff both underlying stream pointers are valid and extrinsics exist. Otherwise
+    /// returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DataError::CouldNotGetExtrinsics`] if this call fails for whatever reason.
+    ///
+    pub fn extrinsics(&self, to_profile: &StreamProfile) -> Result<Rs2Extrinsics, DataError> {
+        unsafe {
+            let mut err = std::ptr::null_mut::<sys::rs2_error>();
+            let mut extrinsics = MaybeUninit::<sys::rs2_extrinsics>::uninit();
+
+            sys::rs2_get_extrinsics(
+                self.ptr.as_ptr(),
+                to_profile.ptr.as_ptr(),
+                extrinsics.as_mut_ptr(),
+                &mut err,
+            );
+            check_rs2_error!(err, DataError::CouldNotGetExtrinsics)?;
+
+            Ok(Rs2Extrinsics(extrinsics.assume_init()))
+        }
+    }
+
+    /// Set `extrinsics` between the origin stream (`self`) and target stream (`to_profile`).
+    ///
+    /// Returns null tuple `()` iff the streams are valid and the extrinsics are successfully set.
+    /// Otherwise returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DataError::CouldNotSetExtrinsics`] if this call fails for whatever reason.
+    ///
+    pub fn set_extrinsics(
+        &self,
+        to_profile: &StreamProfile,
+        extrinsics: Rs2Extrinsics,
+    ) -> Result<(), DataError> {
+        unsafe {
+            let mut err = std::ptr::null_mut::<sys::rs2_error>();
+            sys::rs2_register_extrinsics(
+                self.ptr.as_ptr(),
+                to_profile.ptr.as_ptr(),
+                extrinsics.0,
+                &mut err,
+            );
+            check_rs2_error!(err, DataError::CouldNotSetExtrinsics)?;
+
+            Ok(())
+        }
+    }
+
+    /// Get video intrinsics from the stream.
+    ///
+    /// Returns a set of video intrinsics for the stream iff the stream has video intrinsics and the stream
+    /// pointer is valid. Otherwise returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DataError::StreamDoesNotHaveVideoIntrinsics`] if the stream does not have video
+    /// intrinsics.
+    ///
+    /// Returns [`DataError::CouldNotGetIntrinsics`] if this call fails for any other reason.
+    ///
+    pub fn intrinsics(&self) -> Result<Rs2Intrinsics, DataError> {
+        match self.stream {
+            Rs2StreamKind::Depth => (),
+            Rs2StreamKind::Color => (),
+            Rs2StreamKind::Infrared => (),
+            Rs2StreamKind::Fisheye => (),
+            _ => {
+                return Err(DataError::StreamDoesNotHaveVideoIntrinsics);
+            }
+        }
+        unsafe {
+            let mut err = std::ptr::null_mut::<sys::rs2_error>();
+            let mut intrinsics = MaybeUninit::<sys::rs2_intrinsics>::uninit();
+
+            sys::rs2_get_video_stream_intrinsics(
+                self.ptr.as_ptr(),
+                intrinsics.as_mut_ptr(),
+                &mut err,
+            );
+            check_rs2_error!(err, DataError::CouldNotGetIntrinsics)?;
+
+            Ok(Rs2Intrinsics(intrinsics.assume_init()))
+        }
+    }
+
+    /// Get motion intrinsics from the stream.
+    ///
+    /// Returns a set of motion device intrinsics for the stream iff the stream has motion device
+    /// intrinsics and the stream pointer is valid. Otherwise returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns
+    /// [`DataError::StreamDoesNotHaveMotionIntrinsics`](DataError::StreamDoesNotHaveMotionIntrinsics)
+    /// if the stream does not have motion intrinsics.
+    ///
+    /// Returns [`DataError::CouldNotGetMotionIntrinsics`](DataError::CouldNotGetMotionIntrinsics)
+    /// if this call fails for any other reason.
+    ///
+    pub fn motion_intrinsics(&self) -> Result<Rs2MotionDeviceIntrinsics, DataError> {
+        match self.stream {
+            Rs2StreamKind::Gyro => (),
+            Rs2StreamKind::Accel => (),
+            _ => {
+                return Err(DataError::StreamDoesNotHaveMotionIntrinsics);
+            }
+        }
+        unsafe {
+            let mut err = std::ptr::null_mut::<sys::rs2_error>();
+            let mut intrinsics = MaybeUninit::<sys::rs2_motion_device_intrinsic>::uninit();
+
+            sys::rs2_get_motion_intrinsics(self.ptr.as_ptr(), intrinsics.as_mut_ptr(), &mut err);
+            check_rs2_error!(err, DataError::CouldNotGetMotionIntrinsics)?;
+
+            Ok(Rs2MotionDeviceIntrinsics(intrinsics.assume_init()))
+        }
+    }
+}

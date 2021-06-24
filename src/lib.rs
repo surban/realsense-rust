@@ -1,103 +1,100 @@
-//! The crate provides high level API to librealsense2.
+//! # RealSense Bindings for Rust
 //!
-//! It features asynchronous API and integration with [image](https://crates.io/crates/image) and [nalgebra](https://crates.io/crates/nalgebra).
+//! The project provides high-level bindings (crate `realsense_rust`) to librealsense2 library as well as low-level FFI
+//! (crate `realsense_sys`) interface.
 //!
-//! ## Cargo Features
+//! **Default bindings are for librealsense version: 2.44.0**
 //!
-//! The crate enables **with-nalgebra** and **with-image** features by default.
+//! This project is hosted on both [Github](https://github.com/Tangram-Vision/realsense-rust) and
+//! [Gitlab](https://gitlab.com/tangram-vision-oss/realsense-rust/). While we're happy to receive pull / merge requests
+//! on either platform, we focus most of our work on Gitlab, so please submit an issue there if you've found something
+//! we need to improve or have a question regarding how things work.
 //!
-//! - **with-nalgebra** (default): Enable [nalgebra](https://github.com/rustsim/nalgebra) support.
-//! - **with-image** (default): Enable [image](https://github.com/image-rs/image) support.
+//! ## Getting Started
+//!
+//! Make sure the current librealsense version above is installed on your system. Visit the [RealSense official
+//! repository](https://github.com/IntelRealSense/librealsense) to download and install this on the host machine.
+//!
+//! Once that's done, add this crate to your project's `Cargo.toml`.
+//!
+//! ## Examples and Usage
+//!
+//! Check out the examples folder for helpful snippets of code, as well as minimal configurations that fit some of the
+//! most popular RealSense devices. For more explanation, see the crate documentation.
+//!
+//! ### Features
+//!
+//! Use these by running `cargo run --features <name of feature>`
+//!
 //! - **buildtime-bindgen**: Generate Rust bindings during build time.
 //! - **device-test**: Enable tests that requires connections to RealSense devices.
 //!
-//! ## Get Started
+//! ## Regenerating the API Bindings
 //!
-//! You can start by [Pipeline](Pipeline). This is the minimal example to capture color and depth images.
+//! *Non-Linux users*: The current bindings are formatted for Linux. Users on systems other than Linux must run with the
+//! `buildtime-bindgen` feature to reformat the bindings. See the README in realsense-sys for more.
 //!
-//! ```no_run
-//! use anyhow::Result;
-//! use realsense_rust::{Config, Format, Pipeline, StreamKind};
+//! *Backwards compatibility*: If you're using an older librealsense version, you may enable the `buildtime-bindgen`
+//! feature to re-generate the bindings. We make no claims of backwards compatibility; good luck.
 //!
-//! fn main() -> anyhow::Result<()> {
-//!     let pipeline = Pipeline::new()?;
-//!     let config = Config::new()?
-//!         .enable_stream(StreamKind::Depth, 0, 640, 0, Format::Z16, 30)?
-//!         .enable_stream(StreamKind::Color, 0, 640, 0, Format::Rgb8, 30)?;
-//!     let mut pipeline = pipeline.start(&config)?;
+//! ## Special Considerations
 //!
-//!     let frames = pipeline.wait(None)?.unwrap();
-//!     let color_frame = frames.color_frame()?.unwrap();
-//!     let depth_frame = frames.depth_frame()?.unwrap();
+//! - **USB Current Draw**: Many RealSense devices draw more current than a standard USB cable can provide. For example,
+//!   standard USB can run 0.9 amps, while the RealSense 435i draws 2 amps. Using a USB cable that doesn't have the
+//!   right current capability will interfere with the USB connection on the host, and the device will seem to
+//!   disconnect. A device power cycle doesn't always remedy this, either. In many cases, the host USB hub itself will
+//!   need a reset. Make sure any USB cables used are able to draw at least 2 amps. Read more on the issue
+//!   [here](https://support.intelrealsense.com/hc/en-us/community/posts/360033595714-D435-USB-connection-issues).
 //!
-//!     Ok(())
-//! }
-//! ```
+//! - **USB Bandwidth**: When a device is connected, librealsense will measure the transmission speed of data across its
+//!   USB connection. USB3 speeds can handle all streams running simultaneously. USB2 speeds _cannot_; trying to set a
+//!   streaming configuration that is too much for USB2 will result in a failed streaming config, and will cause the
+//!   program to fail. Luckily, this information can be looked up and compensated for during runtime. See the
+//!   device-specific demo examples for ways to achieve this.
+//!
+//! - **Supported but Ignored Stream Options**: There are a few Sensor options that are registered as "supported" by the
+//!   sensor, but are actually just set to their default values on runtime. These options are listed and tested in
+//!   `check_supported_but_ignored_sensor_options()` device tests. Currently,
+//!   [GlobalTimeEnabled](kind::Rs2Option::GlobalTimeEnabled) on the L500 is the only setting known to suffer from this.
+//!   However, the test has been written in a way that makes it easy to test more Options for this same behavior.
+//!
+//! ## Realsense-sys: A low-level API
+//!
+//! The realsense-sys crate provides C bindings generated from librealsense headers. See the [realsense-sys
+//! crate](https://crates.io/crates/realsense-sys) documentation for more information.
+//!
+//! ## Design Philosophy
+//!
+//! There's a lot of thought that went into making this library Rust-safe. Check out the
+//! [architecture](docs::architecture) doc for our thoughts on Rust safety, error handling, and more for this API.
 
 pub mod base;
-mod common;
 pub mod config;
 pub mod context;
 pub mod device;
 pub mod device_hub;
-pub mod device_list;
-pub mod error;
+pub mod docs;
+mod error;
 pub mod frame;
-pub mod frame_kind;
-pub mod frame_queue;
 pub mod kind;
-pub mod options;
 pub mod pipeline;
-pub mod pipeline_kind;
-pub mod pipeline_profile;
-pub mod processing_block;
-pub mod processing_block_kind;
-pub mod processing_block_list;
 pub mod sensor;
-pub mod sensor_kind;
-pub mod sensor_list;
 pub mod stream_profile;
-pub mod stream_profile_kind;
-pub mod stream_profile_list;
 
-/// The mod collects common used traits from this crate.
+// pub mod frame_queue;
+// pub mod processing_block;
+// pub mod processing_block_kind;
+// pub mod processing_block_list;
+
+/// The module collects common used traits from this crate.
 pub mod prelude {
-    pub use crate::frame::{DepthFrameEx, DisparityFrameEx, GenericFrameEx, VideoFrameEx};
+    pub use crate::frame::{FrameCategory, FrameEx};
 }
 
-#[cfg(feature = "with-image")]
-pub use base::Rs2Image;
-pub use base::{Extrinsics, Intrinsics, MotionIntrinsics, PoseData, Resolution, StreamProfileData};
-pub use config::Config;
-pub use context::Context;
-pub use device::Device;
-pub use device_hub::DeviceHub;
-pub use device_list::{DeviceList, DeviceListIntoIter};
-pub use error::{Error, Result};
-pub use frame::{
-    CompositeFrameIntoIter, DepthFrame, DepthFrameEx, DisparityFrame, DisparityFrameEx,
-    ExtendedFrame, Frame, GenericFrameEx, VideoFrame, VideoFrameEx,
-};
-pub use frame_queue::FrameQueue;
-pub use kind::{
-    CameraInfo, ColorScheme, Extension, Format, FrameMetaDataValue, HoleFillingMode,
-    PersistenceControl, Rs2Option, StreamKind, TimestampDomain,
-};
-pub use options::{OptionHandle, ToOptions};
-pub use pipeline::{ActivePipeline, InactivePipeline, Pipeline};
-pub use pipeline_profile::PipelineProfile;
-pub use processing_block::{
-    Align, AnyProcessingBlock, Colorizer, DecimationFilter, DisparityFilter, HoleFillingFilter,
-    HuffmanDepthDecompress, PointCloud, ProcessingBlock, RatesPrinter, SpatialFilter, Syncer,
-    TemporalFilter, ThresholdFilter, UnitsTransform, YuyDecoder, ZeroOrderFilter,
-};
-pub use processing_block_list::{ProcessingBlockList, ProcessingBlockListIntoIter};
-pub use sensor::{
-    AnySensor, ColorSensor, DepthSensor, DepthStereoSensor, ExtendedSensor, FishEyeSensor,
-    L500DepthSensor, MotionSensor, PoseSensor, Sensor, SoftwareSensor, Tm2Sensor,
-};
-pub use sensor_list::{SensorList, SensorListIntoIter};
-pub use stream_profile::{
-    AnyStreamProfile, MotionStreamProfile, PoseStreamProfile, StreamProfile, VideoStreamProfile,
-};
-pub use stream_profile_list::{StreamProfileList, StreamProfileListIntoIter};
+// pub use frame_queue::FrameQueue;
+// pub use processing_block::{
+//     Align, AnyProcessingBlock, Colorizer, DecimationFilter, DisparityFilter, HoleFillingFilter,
+//     HuffmanDepthDecompress, PointCloud, ProcessingBlock, RatesPrinter, SpatialFilter, Syncer,
+//     TemporalFilter, ThresholdFilter, UnitsTransform, YuyDecoder, ZeroOrderFilter,
+// };
+// pub use processing_block_list::{ProcessingBlockList, ProcessingBlockListIntoIter};

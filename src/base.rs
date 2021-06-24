@@ -1,321 +1,160 @@
 //! Common types and functions.
 
-use std::ffi::OsStr;
-
-use crate::{
-    common::*,
-    error::{Error, Result},
-};
-
-#[cfg(feature = "with-image")]
-pub use rs2_image::*;
+use crate::kind::Rs2DistortionModel;
+use num_traits::FromPrimitive;
+use realsense_sys as sys;
+use std::{ffi::CString, time::Duration};
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(sys::RS2_DEFAULT_TIMEOUT as u64);
 
-/// Fallible conversion to `Cow<'a, CStr>`.
-///
-/// It is used for FFI interfaces that requires C string pointers.
-pub trait TryIntoCowCStr<'a> {
-    fn try_into_cow_cstr(self) -> Result<Cow<'a, CStr>>;
-}
+// Thanks, Tenders McChiken.
+// https://stackoverflow.com/questions/38948669/whats-the-most-direct-way-to-convert-a-path-to-a-c-char
+pub(crate) fn from_path<P>(path: P) -> anyhow::Result<CString>
+where
+    P: AsRef<std::path::Path>,
+{
+    let mut buf = Vec::new();
 
-impl<'a> TryIntoCowCStr<'a> for CString {
-    fn try_into_cow_cstr(self) -> Result<Cow<'a, CStr>> {
-        Ok(self.into())
-    }
-}
-
-impl<'a> TryIntoCowCStr<'a> for &'a CStr {
-    fn try_into_cow_cstr(self) -> Result<Cow<'a, CStr>> {
-        Ok(self.into())
-    }
-}
-
-impl<'a> TryIntoCowCStr<'a> for String {
-    fn try_into_cow_cstr(self) -> Result<Cow<'a, CStr>> {
-        let bytes: Option<Vec<_>> = self
-            .into_bytes()
-            .into_iter()
-            .map(|byte| NonZeroU8::new(byte))
-            .collect();
-        let bytes = bytes.ok_or_else(|| {
-            Error::ToCStrConversion(
-                "cannot convert to CString: the string cannot contain null bytes",
-            )
-        })?;
-        let cstring = CString::from(bytes);
-        Ok(cstring.into())
-    }
-}
-
-impl<'a> TryIntoCowCStr<'a> for &str {
-    fn try_into_cow_cstr(self) -> Result<Cow<'a, CStr>> {
-        let bytes: Option<Vec<_>> = self.bytes().map(|byte| NonZeroU8::new(byte)).collect();
-        let bytes = bytes.ok_or_else(|| {
-            Error::ToCStrConversion(
-                "cannot convert to CString: the string cannot contain null bytes",
-            )
-        })?;
-        let cstring = CString::from(bytes);
-        Ok(cstring.into())
-    }
-}
-
-/// Converts an `OsStr` to a CString.
-pub fn os_str_to_cstring(s: &OsStr) -> CString {
     #[cfg(unix)]
     {
-        CString::new(s.as_bytes()).unwrap()
-    }
+        use std::os::unix::ffi::OsStrExt;
+        buf.extend(path.as_ref().as_os_str().as_bytes());
+        buf.push(0);
+    };
 
     #[cfg(windows)]
     {
-        CString::new(s.to_str().unwrap().as_bytes()).unwrap()
-    }
+        use std::os::windows::ffi::OsStrExt;
+        buf.extend(
+            path.as_ref()
+                .as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .map(|b| {
+                    let b = b.to_ne_bytes();
+                    b.get(0).copied().into_iter().chain(b.get(1).copied())
+                })
+                .flatten(),
+        );
+    };
+
+    Ok(CString::new(buf)?)
 }
 
-/// The intrinsic parameters for motion devices.
-pub struct MotionIntrinsics(pub sys::rs2_motion_device_intrinsic);
-
-impl Deref for MotionIntrinsics {
-    type Target = sys::rs2_motion_device_intrinsic;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for MotionIntrinsics {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl AsRef<sys::rs2_motion_device_intrinsic> for MotionIntrinsics {
-    fn as_ref(&self) -> &sys::rs2_motion_device_intrinsic {
-        &self.0
-    }
-}
-
-impl AsMut<sys::rs2_motion_device_intrinsic> for MotionIntrinsics {
-    fn as_mut(&mut self) -> &mut sys::rs2_motion_device_intrinsic {
-        &mut self.0
-    }
-}
-
-unsafe impl Send for MotionIntrinsics {}
-unsafe impl Sync for MotionIntrinsics {}
-
-/// The intrinsic parameters of stream.
-pub struct Intrinsics(pub sys::rs2_intrinsics);
-
-impl Deref for Intrinsics {
-    type Target = sys::rs2_intrinsics;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Intrinsics {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl AsRef<sys::rs2_intrinsics> for Intrinsics {
-    fn as_ref(&self) -> &sys::rs2_intrinsics {
-        &self.0
-    }
-}
-
-impl AsMut<sys::rs2_intrinsics> for Intrinsics {
-    fn as_mut(&mut self) -> &mut sys::rs2_intrinsics {
-        &mut self.0
-    }
-}
-
-unsafe impl Send for Intrinsics {}
-unsafe impl Sync for Intrinsics {}
-
-/// The extrinsic parameters of stream.
-pub struct Extrinsics(pub sys::rs2_extrinsics);
-
-#[cfg(feature = "with-nalgebra")]
-impl Extrinsics {
-    pub fn to_isometry(&self) -> Isometry3<f32> {
-        let rotation = {
-            let matrix = MatrixMN::<f32, U3, U3>::from_iterator(self.0.rotation.iter().copied());
-            UnitQuaternion::from_matrix(&matrix)
-        };
-        let translation = {
-            let [x, y, z] = self.0.translation;
-            Translation3::new(x, y, z)
-        };
-        Isometry3::from_parts(translation, rotation)
-    }
-}
-
-impl Deref for Extrinsics {
-    type Target = sys::rs2_extrinsics;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Extrinsics {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl AsRef<sys::rs2_extrinsics> for Extrinsics {
-    fn as_ref(&self) -> &sys::rs2_extrinsics {
-        &self.0
-    }
-}
-
-impl AsMut<sys::rs2_extrinsics> for Extrinsics {
-    fn as_mut(&mut self) -> &mut sys::rs2_extrinsics {
-        &mut self.0
-    }
-}
-
-unsafe impl Send for Extrinsics {}
-unsafe impl Sync for Extrinsics {}
-
-/// Represents a pose detected by sensor.
 #[derive(Debug)]
-pub struct PoseData(pub sys::rs2_pose);
+pub struct Rs2MotionDeviceIntrinsics(pub sys::rs2_motion_device_intrinsic);
 
-impl PoseData {
-    pub fn tracker_confidence(&self) -> u32 {
-        self.0.tracker_confidence as u32
-    }
-
-    pub fn mapper_confidence(&self) -> u32 {
-        self.0.mapper_confidence as u32
-    }
-}
-
-#[cfg(feature = "with-nalgebra")]
-impl PoseData {
-    pub fn translation(&self) -> Translation3<f32> {
-        let sys::rs2_vector { x, y, z } = self.0.translation;
-        Translation3::new(x, y, z)
-    }
-
-    pub fn velocity(&self) -> Vector3<f32> {
-        let sys::rs2_vector { x, y, z } = self.0.velocity;
-        Vector3::new(x, y, z)
-    }
-
-    pub fn acceleration(&self) -> Vector3<f32> {
-        let sys::rs2_vector { x, y, z } = self.0.acceleration;
-        Vector3::new(x, y, z)
-    }
-
-    pub fn rotation(&self) -> UnitQuaternion<f32> {
-        let sys::rs2_quaternion { x, y, z, w } = self.0.rotation;
-        Unit::new_unchecked(Quaternion::new(w, x, z, y))
-    }
-
-    pub fn angular_velocity(&self) -> Vector3<f32> {
-        let sys::rs2_vector { x, y, z } = self.0.angular_velocity;
-        Vector3::new(x, y, z)
-    }
-
-    pub fn angular_acceleration(&self) -> Vector3<f32> {
-        let sys::rs2_vector { x, y, z } = self.0.angular_acceleration;
-        Vector3::new(x, y, z)
-    }
-}
-
-impl Deref for PoseData {
-    type Target = sys::rs2_pose;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for PoseData {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl AsRef<sys::rs2_pose> for PoseData {
-    fn as_ref(&self) -> &sys::rs2_pose {
-        &self.0
-    }
-}
-
-impl AsMut<sys::rs2_pose> for PoseData {
-    fn as_mut(&mut self) -> &mut sys::rs2_pose {
-        &mut self.0
-    }
-}
-
-unsafe impl Send for PoseData {}
-unsafe impl Sync for PoseData {}
-
-/// Contains width and height of a frame.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct Resolution {
-    pub width: usize,
-    pub height: usize,
-}
-/// Represents the specification of a stream.
-#[derive(Debug)]
-pub struct StreamProfileData {
-    pub stream: StreamKind,
-    pub format: Format,
-    pub index: usize,
-    pub unique_id: i32,
-    pub framerate: i32,
-}
-
-#[cfg(feature = "with-image")]
-mod rs2_image {
-    use super::*;
-
-    /// Image type returned by sensor.
+/// Profile the scale, bias, and variances for a given motion device
+///
+/// The bias and scale factors are stored as one large matrix; see the documentation on `data()` for the correct way to
+/// retrieve these parameters.
+///
+/// Use the function `stream_profile.motion_intrinsics()` to retrieve these intrinsics from a certain stream.
+impl Rs2MotionDeviceIntrinsics {
+    /// A 3x4 matrix describing the scale and bias intrinsics of the motion device.
     ///
-    /// This is a wrapper of various [ImageBuffer](image::ImageBuffer) variants.
-    /// It pixel data is stored in slice for better performance.
-    #[derive(Debug, Clone)]
-    pub enum Rs2Image<'a> {
-        Bgr8(ImageBuffer<Bgr<u8>, &'a [u8]>),
-        Bgra8(ImageBuffer<Bgra<u8>, &'a [u8]>),
-        Rgb8(ImageBuffer<Rgb<u8>, &'a [u8]>),
-        Rgba8(ImageBuffer<Rgba<u8>, &'a [u8]>),
-        Luma16(ImageBuffer<Luma<u16>, &'a [u16]>),
+    /// This matrix is stored internally like so:
+    /// [ Scale X    | cross axis  | cross axis | Bias X ]
+    /// [ cross axis | Scale Y     | cross axis | Bias Y ]
+    /// [ cross axis | cross axis  | Scale Z    | Bias Z ]
+    ///
+    pub fn data(&self) -> [[f32; 4usize]; 3usize] {
+        self.0.data
+    }
+    /// Variance of noise for X, Y, and Z axis.
+    pub fn noise_variances(&self) -> [f32; 3usize] {
+        self.0.noise_variances
+    }
+    /// Variance of bias for X, Y, and Z axis.
+    pub fn bias_variances(&self) -> [f32; 3usize] {
+        self.0.bias_variances
+    }
+}
+
+unsafe impl Send for Rs2MotionDeviceIntrinsics {}
+
+/// Type representing the intrinsic scale, bias, and variances for a given motion device.
+///
+/// The data in `coeffs` means different things for different models.
+///
+/// - Brown-Conrady: [k1, k2, p1, p2, k3].
+/// - F-Theta Fisheye: [k1, k2, k3, k4, 0].
+/// - Kannala-Brandt: [k1, k2, k3, k4, 0].
+///
+/// The Intel RealSense documentation claims that "Other models are subject to their own interpretations". This is
+/// admittedly not too helpful, but it's worth noting in case your model isn't covered here.
+#[derive(Debug)]
+pub struct Rs2Distortion {
+    /// Distortion model of the image.
+    pub model: Rs2DistortionModel,
+    /// Distortion coefficients.
+    pub coeffs: [f32; 5usize],
+}
+
+unsafe impl Send for Rs2Distortion {}
+
+/// Type representing the model for describing the way that light bends in a stream.
+///
+/// This stores the focal length, principal point, dimensions, and distortion model used on the image frame. See the
+/// documentation for [Rs2Distortion] for specifics on the available distortion models for RealSense devices.
+///
+/// Use the function `stream_profile.intrinsics()` to retrieve these intrinsics from a certain stream.
+#[derive(Debug)]
+pub struct Rs2Intrinsics(pub sys::rs2_intrinsics);
+
+impl Rs2Intrinsics {
+    /// Width of the image in pixels
+    pub fn width(&self) -> usize {
+        self.0.width as usize
+    }
+    /// Height of the image in pixels
+    pub fn height(&self) -> usize {
+        self.0.height as usize
     }
 
-    /// Creates an owned image by coping underlying buffer.
-    impl<'a> Rs2Image<'a> {
-        pub fn to_owned(&self) -> DynamicImage {
-            self.into()
-        }
+    /// Horizontal coordinate of the principal point of the image, as a pixel offset from the left edge
+    pub fn ppx(&self) -> f32 {
+        self.0.ppx
     }
-
-    impl<'a> From<&Rs2Image<'a>> for DynamicImage {
-        fn from(from: &Rs2Image<'a>) -> DynamicImage {
-            match from {
-                Rs2Image::Bgr8(image) => DynamicImage::ImageBgr8(image.convert()),
-                Rs2Image::Bgra8(image) => DynamicImage::ImageBgra8(image.convert()),
-                Rs2Image::Rgb8(image) => DynamicImage::ImageRgb8(image.convert()),
-                Rs2Image::Rgba8(image) => DynamicImage::ImageRgba8(image.convert()),
-                Rs2Image::Luma16(image) => DynamicImage::ImageLuma16(image.convert()),
-            }
-        }
+    /// Vertical coordinate of the principal point of the image, as a pixel offset from the top edge
+    pub fn ppy(&self) -> f32 {
+        self.0.ppy
     }
-
-    impl<'a> From<Rs2Image<'a>> for DynamicImage {
-        fn from(from: Rs2Image<'a>) -> DynamicImage {
-            (&from).into()
+    /// Focal length of the image plane, as a multiple of pixel width
+    pub fn fx(&self) -> f32 {
+        self.0.fx
+    }
+    /// Focal length of the image plane, as a multiple of pixel height
+    pub fn fy(&self) -> f32 {
+        self.0.fy
+    }
+    /// Distortion model and coefficients of the image
+    pub fn distortion(&self) -> Rs2Distortion {
+        Rs2Distortion {
+            model: Rs2DistortionModel::from_i32(self.0.model as i32).unwrap(),
+            coeffs: self.0.coeffs,
         }
     }
 }
+
+unsafe impl Send for Rs2Intrinsics {}
+
+/// The topology describing how the different devices are oriented.
+///
+/// Use the function `stream_profile.extrinsics()` to retrieve these extrinsics from a certain stream in relation to
+/// another stream on the same device.
+#[derive(Debug)]
+pub struct Rs2Extrinsics(pub sys::rs2_extrinsics);
+
+impl Rs2Extrinsics {
+    /// Column-major 3x3 rotation matrix
+    pub fn rotation(&self) -> [f32; 9usize] {
+        self.0.rotation
+    }
+    /// Three-element translation vector, in meters
+    pub fn translation(&self) -> [f32; 3usize] {
+        self.0.translation
+    }
+}
+
+unsafe impl Send for Rs2Extrinsics {}

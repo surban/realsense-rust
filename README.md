@@ -1,104 +1,78 @@
-# RealSense bindings for Rust
+# RealSense Bindings for Rust
 
-The project provides high-level bindings to librealsense2 library as well as low-level FFI interface.
-It supports asynchronous API and integration with [image](https://github.com/image-rs/image) and [nalgebra](https://github.com/rustsim/nalgebra) types.
+The project provides high-level bindings (crate `realsense_rust`) to librealsense2 library as well as low-level FFI
+(crate `realsense_sys`) interface.
 
-## Use this crate in your project
+**Default bindings are for librealsense version: 2.44.0**
 
-Make sure **librealsense 2.39.0** is installed on your system. You may visit [RealSense official repository](https://github.com/IntelRealSense/librealsense).
+This project is hosted on both [Github](https://github.com/Tangram-Vision/realsense-rust) and
+[Gitlab](https://gitlab.com/tangram-vision-oss/realsense-rust/). While we're happy to receive pull / merge requests on
+either platform, we focus most of our work on Gitlab, so please submit an issue there if you've found something we need
+to improve or have a question regarding how things work.
 
-Add this crate to your `Cargo.toml`.
+## Getting Started
 
-```toml
-[dependencies]
-realsense-rust = "0.5"
-```
+Make sure the current librealsense version above is installed on your system. Visit the [RealSense official
+repository](https://github.com/IntelRealSense/librealsense) to download and install this on the host machine.
 
-If you're using older librealsense for reasons. You may enable `buildtime-bindgen` to re-generate bindings and good luck.
+Once that's done, add this crate to your project's `Cargo.toml`.
 
-```toml
-[dependencies]
-realsense-rust = { version = "0.5", features = ["buildtime-bindgen"] }
-```
+## Examples and Usage
 
-## Cargo Features
+Check out the examples folder for helpful snippets of code, as well as minimal configurations that fit some of the most
+popular RealSense devices. For more explanation, see the crate documentation.
 
-The crate enables **with-nalgebra** and **with-image** features by default.
+### Features
 
-- **with-nalgebra** (default): Enable [nalgebra](https://github.com/rustsim/nalgebra) support.
-- **with-image** (default): Enable [image](https://github.com/image-rs/image) support.
+Use these by running `cargo run --features <name of feature>`
+
 - **buildtime-bindgen**: Generate Rust bindings during build time.
 - **device-test**: Enable tests that requires connections to RealSense devices.
 
-## Get Started
+## Regenerating the API Bindings
 
-You can start by `Pipeline`. This is the minimal example to capture color and depth images.
+*Non-Linux users*: The current bindings are formatted for Linux. Users on systems other than Linux must run with the
+`buildtime-bindgen` feature to reformat the bindings. See the README in realsense-sys for more. 
 
-```rust
-use anyhow::Result;
-use realsense_rust::{Config, Format, Pipeline, StreamKind};
+*Backwards compatibility*: If you're using an older librealsense version, you may enable the `buildtime-bindgen` feature
+to re-generate the bindings. We make no claims of backwards compatibility; good luck.
 
-fn main() -> anyhow::Result<()> {
-    let pipeline = Pipeline::new()?;
-    let config = Config::new()?
-        .enable_stream(StreamKind::Depth, 0, 640, 0, Format::Z16, 30)?
-        .enable_stream(StreamKind::Color, 0, 640, 0, Format::Rgb8, 30)?;
-    let mut pipeline = pipeline.start(&config)?;
+## Special Considerations
 
-    let frames = pipeline.wait(None)?.unwrap();
-    let color_frame = frames.color_frame()?.unwrap();
-    let depth_frame = frames.depth_frame()?.unwrap();
+- **USB Current Draw**: Many RealSense devices draw more current than a standard USB cable can provide. For example,
+  standard USB can run 0.9 amps, while the RealSense 435i draws 2 amps. Using a USB cable that doesn't have the right
+  current capability will interfere with the USB connection on the host, and the device will seem to disconnect. A
+  device power cycle doesn't always remedy this, either. In many cases, the host USB hub itself will need a reset. Make
+  sure any USB cables used are able to draw at least 2 amps. Read more on the issue
+  [here](https://support.intelrealsense.com/hc/en-us/community/posts/360033595714-D435-USB-connection-issues).
 
-    Ok(())
-}
-```
+- **USB Bandwidth**: When a device is connected, librealsense will measure the transmission speed of data across its USB
+  connection. USB3 speeds can handle all streams running simultaneously. USB2 speeds _cannot_; trying to set a streaming
+  configuration that is too much for USB2 will result in a failed streaming config, and will cause the program to fail.
+  Luckily, this information can be looked up and compensated for during runtime. See the [device-specific demo
+  examples](examples/) for ways to achieve this.
 
-## Examples
+- **Supported but Ignored Stream Options**: There are a few Sensor options that are registered as "supported" by the
+  sensor, but are actually just set to their default values on runtime. These options are listed and tested in
+  [check_supported_but_ignored_sensor_options](./tests/connectivity_l500.rs) device tests. Currently,
+  [Rs2Option::GlobalTimeEnabled] on the L500 is the only setting known to suffer from this. However, the test has been
+  written in a way that makes it easy to test more Options for this same behavior.
 
-To capture image with your RealSense device,
+## Realsense-sys: A low-level API
 
+The realsense-sys crate provides C bindings generated from librealsense headers. See the realsense-sys
+[README](./realsense-sys/README.md) for more information. 
 
-```rust
-cargo run --release --example capture_images
-```
+## Design Philosophy
 
-More examples can be found in [examples](examples) directory.
+There's a lot of thought that went into making this library Rust-safe. Check out the
+[architecture](./src/docs/architecture.rs) doc for our thoughts on Rust safety, error handling, and more for this API. 
 
-## Develop this project
+## Contributing
 
-### Work with realsense-sys low-level API
-
-The realsense-sys crate provides C bindings generated from librealsense headers. The reference can be found on RealSense official [documentation](https://github.com/IntelRealSense/librealsense/tree/master/doc).
-
-Import realsense-sys to your `Cargo.toml`.
-
-```toml
-[dependencies]
-realsense-sys = "0.3"
-```
-
-and you can call low level C functions.
-
-```rust
-let pipeline = Pipeline::new()?;
-let (pipeline_ptr, context_ptr) = pipeline.into_raw_parts();
-
-unsafe {
-    let mut error: *mut realsense_sys::rs2_error = std::ptr::null_mut();
-    realsense_sys::rs2_pipeline_start(pipeline_ptr, &mut error as *mut _);
-    if !error.is_null() {
-        panic!("fail");
-    }
-}
-```
-
-### Generate documents from source code
-
-The API changes may not be found on docs.rs. To generate document from the most recent commit,
-
-```sh
-cargo doc --open
-```
+First, check out our [contributing guidelines](CONTRIBUTING.md). After that, make sure that you read through the
+documentation in [lib.rs](src/lib.rs) as well as any of the modules you might be interested in contributing to! If you
+find documentation missing, this is considered a bug, so please submit a bug report!
 
 ## License
 
