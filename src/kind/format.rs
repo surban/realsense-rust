@@ -38,7 +38,6 @@ pub enum Rs2Format {
     ///
     /// Contains translation vector, rotation quaternion, prediction velocities, and accelerations
     /// vectors.
-    ///
     _6Dof = sys::rs2_format_RS2_FORMAT_6DOF as i32,
     /// 8-bit blue, green, and red channels (in that order)
     Bgr8 = sys::rs2_format_RS2_FORMAT_BGR8 as i32,
@@ -51,14 +50,12 @@ pub enum Rs2Format {
     /// Depth -> disparity conversion is done with the formula:
     ///
     ///   disparity = baseline * focal_length / depth
-    ///
     Disparity16 = sys::rs2_format_RS2_FORMAT_DISPARITY16 as i32,
     /// 32-bit floating-point disparity values.
     ///
     /// Depth -> disparity conversion is done with the formula:
     ///
     ///   disparity = baseline * focal_length / depth
-    ///
     Disparity32 = sys::rs2_format_RS2_FORMAT_DISPARITY32 as i32,
     /// Motion data packed as 3 32-bit fload values in [x, y, z] order
     MotionXyz32F = sys::rs2_format_RS2_FORMAT_MOTION_XYZ32F as i32,
@@ -108,9 +105,9 @@ pub enum Rs2Format {
     Z16H = sys::rs2_format_RS2_FORMAT_Z16H as i32,
     /// 16-bit per pixel frame grabber format
     Fg = sys::rs2_format_RS2_FORMAT_FG as i32,
-    // Not included since this just tells us the total number of formats
-    //
-    // Count = sys::rs2_format_RS2_FORMAT_COUNT,
+    /* Not included since this just tells us the total number of formats
+     *
+     * Count = sys::rs2_format_RS2_FORMAT_COUNT, */
 }
 
 #[cfg(test)]

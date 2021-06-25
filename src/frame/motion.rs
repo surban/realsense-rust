@@ -118,7 +118,6 @@ impl<K> TryFrom<NonNull<sys::rs2_frame>> for MotionFrame<K> {
     /// - [CouldNotGetData](FrameConstructionError::CouldNotGetData)
     ///
     /// See [FrameConstructionError] documentation for more details.
-    ///
     fn try_from(frame_ptr: NonNull<sys::rs2_frame>) -> Result<Self, Self::Error> {
         unsafe {
             let mut err = ptr::null_mut::<sys::rs2_error>();
@@ -256,7 +255,6 @@ impl AccelFrame {
     ///
     /// Read more about the coordinate frames of RealSense motion in
     /// [the RealSense docs](https://www.intelrealsense.com/how-to-getting-imu-data-from-d435i-and-t265/)
-    ///
     pub fn acceleration(&self) -> &[f32; 3] {
         &self.motion
     }
@@ -284,7 +282,6 @@ impl GyroFrame {
     ///
     /// Read more about the coordinate frames of RealSense motion in
     /// [the RealSense docs](https://www.intelrealsense.com/how-to-getting-imu-data-from-d435i-and-t265/)
-    ///
     pub fn rotational_velocity(&self) -> &[f32; 3] {
         &self.motion
     }

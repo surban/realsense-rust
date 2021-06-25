@@ -14,7 +14,6 @@
 //! that are only valid with an inactive (stopped) pipeline are only provided alongside the
 //! [`InactivePipeline`] type, while interfaces that are only valid with an active (started)
 //! pipeline are only provided alongside the [`ActivePipeline`] type.
-//!
 
 mod active;
 mod inactive;

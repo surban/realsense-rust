@@ -42,8 +42,8 @@
 //!
 //! ```rust
 //! use num_traits::FromPrimitive;
-//! use realsense_sys as sys;
 //! use realsense_rust::kind::Rs2CameraInfo;
+//! use realsense_sys as sys;
 //!
 //! for i in 0..sys::rs2_camera_info_RS2_CAMERA_INFO_COUNT as i32 {
 //!     println!(
@@ -53,7 +53,6 @@
 //!     );
 //! }
 //! ```
-//!
 
 mod camera_info;
 mod color_scheme;

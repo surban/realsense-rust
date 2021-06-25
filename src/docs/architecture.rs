@@ -136,7 +136,9 @@
 //! ```no_run
 //! use realsense_rust::kind::Rs2Exception;
 //!
-//! pub enum SomeError { CouldNotXXX(Rs2Exception, String), }
+//! pub enum SomeError {
+//!     CouldNotXXX(Rs2Exception, String),
+//! }
 //! ```
 //!
 //! The enum field names should inform you what specific part of the function failed (if there are multiple parts). The

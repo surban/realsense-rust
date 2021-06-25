@@ -60,7 +60,6 @@ pub enum OptionSetError {
 /// - Equivalent to `RS2_OPTION_ZERO_ORDER_POINT_Y`
 /// - Replacement: N/A.
 /// - Old Description: "Get the Zero order point y."
-///
 #[repr(i32)]
 #[derive(FromPrimitive, ToPrimitive, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Rs2Option {
@@ -113,7 +112,6 @@ pub enum Rs2Option {
     /// - `1`: enable laser
     /// - `2`: enable auto laser
     /// - `3`: enable LED
-    ///
     EmitterEnabled = sys::rs2_option_RS2_OPTION_EMITTER_ENABLED as i32,
     /// Set the number of frames the user is allowed to keep per stream.
     /// Trying to hold on to more frames will cause frame drops.
@@ -125,7 +123,6 @@ pub enum Rs2Option {
     /// - Static
     /// - Anti-Flicker
     /// - Hybrid
-    ///
     AutoExposureMode = sys::rs2_option_RS2_OPTION_AUTO_EXPOSURE_MODE as i32,
     /// Set the power line frequency control for anti-flickering:
     ///
@@ -133,7 +130,6 @@ pub enum Rs2Option {
     /// - 50Hz
     /// - 60Hz
     /// - Auto
-    ///
     PowerLineFrequency = sys::rs2_option_RS2_OPTION_POWER_LINE_FREQUENCY as i32,
     /// Get the current Temperature of the ASIC.
     AsicTemperature = sys::rs2_option_RS2_OPTION_ASIC_TEMPERATURE as i32,
@@ -271,9 +267,9 @@ pub enum Rs2Option {
     /// set to 16. If the requested gain limit is greater than 248, it will be set to 248. Setting
     /// will not take effect until next streaming session.
     AutoGainLimit = sys::rs2_option_RS2_OPTION_AUTO_GAIN_LIMIT as i32,
-    // Not included since this just tells us the total number of options.
-    //
-    // Count = sys::rs2_option_RS2_OPTION_COUNT,
+    /* Not included since this just tells us the total number of options.
+     *
+     * Count = sys::rs2_option_RS2_OPTION_COUNT, */
 }
 
 impl Rs2Option {

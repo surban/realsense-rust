@@ -16,7 +16,6 @@
 //! | `RS2_PRODUCT_LINE_T200`      | `0x10`                                                                       |
 //! | `RS2_PRODUCT_LINE_DEPTH`     | `(RS2_PRODUCT_LINE_L500 or RS2_PRODUCT_LINE_SR300 or RS2_PRODUCT_LINE_D400)` |
 //! | `RS2_PRODUCT_LINE_TRACKING`  | `RS2_PRODUCT_LINE_T200`                                                      |
-//!
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use realsense_sys as sys;

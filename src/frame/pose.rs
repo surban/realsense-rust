@@ -155,7 +155,6 @@ impl TryFrom<NonNull<sys::rs2_frame>> for PoseFrame {
     /// - [`CouldNotGetData`](FrameConstructionError::CouldNotGetData)
     ///
     /// See [`FrameConstructionError`] documentation for more details.
-    ///
     fn try_from(frame_ptr: NonNull<sys::rs2_frame>) -> Result<Self, Self::Error> {
         unsafe {
             let mut err = ptr::null_mut::<sys::rs2_error>();

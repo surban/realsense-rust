@@ -86,7 +86,6 @@ pub(crate) unsafe fn get_pixel<'a>(
         // the correct Y depending on whether the row is even or odd.
         //
         // NOTE: Order matters because we are taking advantage of integer division here.
-        //
         Rs2Format::Yuyv => {
             let slice = slice::from_raw_parts(data.cast::<u8>(), data_size_in_bytes);
             let offset = (row * stride_in_bytes) + (col / 2) * 4;
@@ -105,7 +104,6 @@ pub(crate) unsafe fn get_pixel<'a>(
         }
         // UYVY follows from the same exact pattern we use for YUYV, since it's more or less a
         // re-ordering of the underlying data.
-        //
         Rs2Format::Uyvy => {
             let slice = slice::from_raw_parts(data.cast::<u8>(), data_size_in_bytes);
             let offset = (row * stride_in_bytes) + (col / 2) * 4;
@@ -124,7 +122,6 @@ pub(crate) unsafe fn get_pixel<'a>(
         }
         // For BGR / RGB, we do a similar trick, but since pixels aren't interleaved as they
         // are with YUYV / UYVY, the multipliers for column and row offsets can be uniform.
-        //
         Rs2Format::Bgr8 => {
             let slice = slice::from_raw_parts(data.cast::<u8>(), data_size_in_bytes);
             let offset = (row * stride_in_bytes) + (col * 3);
@@ -136,7 +133,6 @@ pub(crate) unsafe fn get_pixel<'a>(
             }
         }
         // BGRA8 is more or less the same as BGR8, except we use 4 as a multiplier.
-        //
         Rs2Format::Bgra8 => {
             let slice = slice::from_raw_parts(data.cast::<u8>(), data_size_in_bytes);
             let offset = (row * stride_in_bytes) + (col * 4);
@@ -149,7 +145,6 @@ pub(crate) unsafe fn get_pixel<'a>(
             }
         }
         // RGB8 is the same as BGR8, the order is just different.
-        //
         Rs2Format::Rgb8 => {
             let slice = slice::from_raw_parts(data.cast::<u8>(), data_size_in_bytes);
             let offset = (row * stride_in_bytes) + (col * 3);
@@ -161,7 +156,6 @@ pub(crate) unsafe fn get_pixel<'a>(
             }
         }
         // RGBA8 is the same as BGRA8, the order is just different.
-        //
         Rs2Format::Rgba8 => {
             let slice = slice::from_raw_parts(data.cast::<u8>(), data_size_in_bytes);
             let offset = (row * stride_in_bytes) + (col * 4);

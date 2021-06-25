@@ -105,7 +105,6 @@ impl Config {
     /// of the provided arguments / attributes. If those are invalid, they will be checked when you
     /// call [`InactivePipeline::start`](crate::pipeline::InactivePipeline::start) or
     /// [`InactivePipeline::resolve`](crate::pipeline::InactivePipeline::resolve).
-    ///
     pub fn enable_stream(
         &mut self,
         stream: Rs2StreamKind,
@@ -147,7 +146,6 @@ impl Config {
     ///
     /// Returns [`ConfigurationError::CouldNotEnableAllStreams`] if this call fails for whatever
     /// reason.
-    ///
     pub fn enable_all_streams(&mut self) -> Result<&mut Self, ConfigurationError> {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();
@@ -169,7 +167,6 @@ impl Config {
     /// # Errors
     ///
     /// Returns [`ConfigurationError::CouldNotEnableDevice`] if the device could not be enabled.
-    ///
     pub fn enable_device_from_serial(
         &mut self,
         serial: &CStr,
@@ -201,7 +198,6 @@ impl Config {
     /// Returns a [`ConfigurationError::CouldNotEnableDevice`] if the device cannot be enabled for
     /// any reason. e.g. if your `file` is valid and can be converted into a `CString`, but is
     /// actually a path to a directory, you'll likely see an error here.
-    ///
     pub fn enable_device_from_file<P>(&mut self, file: P, loop_playback: bool) -> Result<&mut Self>
     where
         P: AsRef<Path>,
@@ -238,7 +234,6 @@ impl Config {
     ///
     /// Returns [`ConfigurationError::CouldNotEnableRecordingToFile`] if the path is not a valid
     /// path to a file or if you are trying to record to a file while streaming from a file.
-    ///
     pub fn enable_record_to_file<P>(&mut self, file: P) -> Result<&mut Self>
     where
         P: AsRef<Path>,
@@ -263,7 +258,6 @@ impl Config {
     /// # Errors
     ///
     /// Returns [`ConfigurationError::CouldNotDisableStream`] if the stream cannot be disabled.
-    ///
     pub fn disable_stream_at_index(
         &mut self,
         stream: Rs2StreamKind,
@@ -292,7 +286,6 @@ impl Config {
     /// # Errors
     ///
     /// Returns [`ConfigurationError::CouldNotDisableStream`] if the stream cannot be disabled.
-    ///
     pub fn disable_stream(
         &mut self,
         stream: Rs2StreamKind,
@@ -320,7 +313,6 @@ impl Config {
     ///
     /// Returns [`ConfigurationError::CouldNotDisableAllStreams`] if the streams cannot be
     /// disabled.
-    ///
     pub fn disable_all_streams(&mut self) -> Result<&mut Self, ConfigurationError> {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();
@@ -337,7 +329,6 @@ impl Config {
     /// This method is not intended to be called or used outside of the crate itself. Be warned, it
     /// is _undefined behaviour_ to call [`realsense_sys::rs2_delete_config`] on this pointer. If
     /// you do, you risk a double-free error when the [`Config`] struct itself is dropped.
-    ///
     pub(crate) unsafe fn get_raw(&self) -> NonNull<sys::rs2_config> {
         self.config_ptr
     }

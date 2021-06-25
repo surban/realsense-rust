@@ -201,7 +201,6 @@ fn supported_but_ignored_options_and_vals_map() -> HashMap<Rs2Option, Option<f32
 ///
 /// A ticket addressing this issue in the RealSense SDK can be found
 /// [here](https://github.com/IntelRealSense/librealsense/issues/8579)
-///
 #[test]
 fn l500_streams_check_supported_but_ignored_sensor_options() {
     let options_to_set = possible_options_and_vals_map();

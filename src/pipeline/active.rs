@@ -94,7 +94,6 @@ impl ActivePipeline {
     ///
     /// Returns [`FrameWaitError::DidTimeoutBeforeFrameArrival`] if the thread waits more than
     /// `timeout_ms` (in milliseconds) without returning a frame.
-    ///
     pub fn wait(&mut self, timeout_ms: Option<Duration>) -> Result<CompositeFrame, FrameWaitError> {
         let timeout_ms = match timeout_ms {
             Some(d) => d.as_millis() as u32,
@@ -139,7 +138,6 @@ impl ActivePipeline {
     ///
     /// Returns [`FrameWaitError::DidErrorDuringFramePoll`] if an internal error occurs while
     /// polling for the next frame.
-    ///
     pub fn poll(&mut self) -> Result<Poll<CompositeFrame>, FrameWaitError> {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();

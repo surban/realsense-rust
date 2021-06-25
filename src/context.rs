@@ -53,7 +53,6 @@ impl Context {
     /// # Errors
     ///
     /// Returns [`ContextConstructionError`] if the context cannot be created.
-    ///
     pub fn new() -> Result<Self, ContextConstructionError> {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();
@@ -71,7 +70,6 @@ impl Context {
     /// # Errors
     ///
     /// Returns [`CouldNotGetDeviceHubError`] if the device hub cannot be created.
-    ///
     pub fn create_device_hub(&self) -> Result<DeviceHub, CouldNotGetDeviceHubError> {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();
@@ -143,7 +141,6 @@ impl Context {
     /// expected to work.
     ///
     /// Returns [`CouldNotAddDeviceError`] if the device cannot be added.
-    ///
     pub fn add_device<P>(&mut self, file: P) -> Result<Device>
     where
         P: AsRef<Path>,
@@ -167,7 +164,6 @@ impl Context {
     /// # Errors
     ///
     /// Returns [`CouldNotRemoveDeviceError`] if the device cannot be removed for any reason.
-    ///
     pub fn remove_device<P>(&mut self, file: P) -> Result<()>
     where
         P: AsRef<Path>,
@@ -189,7 +185,6 @@ impl Context {
     /// This method is not intended to be called or used outside of the crate itself. Be warned, it
     /// is _undefined behaviour_ to call [`realsense_sys::rs2_delete_context`] on this pointer. If
     /// you do, you risk a double-free error when the [`Context`] struct itself is dropped.
-    ///
     pub(crate) unsafe fn get_raw(&self) -> NonNull<sys::rs2_context> {
         self.context_ptr
     }

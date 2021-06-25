@@ -46,7 +46,6 @@ impl TryFrom<NonNull<sys::rs2_pipeline_profile>> for PipelineProfile {
     ///
     /// Returns [`PipelineProfileConstructionError::CouldNotRetrieveStreamCount`] if the length of
     /// the list of streams associated with the pipeline profile cannot be obtained.
-    ///
     fn try_from(
         pipeline_profile_ptr: NonNull<sys::rs2_pipeline_profile>,
     ) -> Result<Self, Self::Error> {

@@ -37,7 +37,6 @@ pub enum DeviceConstructionError {
 /// streams producing frames.
 ///
 /// Devices are usually acquired by the driver context.
-///
 #[derive(Debug)]
 pub struct Device {
     device_ptr: NonNull<sys::rs2_device>,
@@ -57,7 +56,6 @@ impl From<NonNull<sys::rs2_device>> for Device {
     /// Attempt to construct a Device from a non-null pointer to `rs2_device`.
     ///
     /// Constructs a device from a pointer to an `rs2_device` type from the C-FFI.
-    ///
     fn from(device_ptr: NonNull<sys::rs2_device>) -> Self {
         Device { device_ptr }
     }
@@ -70,7 +68,6 @@ impl Device {
     ///
     /// Returns [`DeviceConstructionError::CouldNotGetDeviceFromDeviceList`] if the device cannot
     /// be retrieved from the device list (e.g. if the index is invalid).
-    ///
     pub(crate) fn try_create(
         device_list: &NonNull<sys::rs2_device_list>,
         index: i32,
@@ -93,7 +90,6 @@ impl Device {
     ///
     /// Returns a vector of zero size if any error occurs while trying to read the sensor list.
     /// This can occur if the physical device is disconnected before this call is made.
-    ///
     pub fn sensors(&self) -> Vec<Sensor> {
         unsafe {
             let mut sensors = Vec::new();
@@ -136,7 +132,6 @@ impl Device {
     ///
     /// Ownership of the device is taken as the underlying state can no longer be safely retained
     /// after resetting the device.
-    ///
     pub fn hardware_reset(self) {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();
@@ -156,7 +151,6 @@ impl Device {
     ///
     /// Returns some information value associated with the camera info key if the `camera_info` is
     /// supported by the device, else it returns `None`.
-    ///
     pub fn info(&self, camera_info: Rs2CameraInfo) -> Option<&CStr> {
         if !self.supports_info(camera_info) {
             return None;
@@ -184,7 +178,6 @@ impl Device {
     /// Predicate for checking if `camera_info` is supported for this device.
     ///
     /// Returns true iff the device has a value associated with the `camera_info` key.
-    ///
     pub fn supports_info(&self, camera_info: Rs2CameraInfo) -> bool {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();

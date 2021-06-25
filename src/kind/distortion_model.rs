@@ -26,9 +26,9 @@ pub enum Rs2DistortionModel {
     FThetaFisheye = sys::rs2_distortion_RS2_DISTORTION_FTHETA as i32,
     /// Four parameter Kannala Brandt distortion model
     KannalaBrandt = sys::rs2_distortion_RS2_DISTORTION_KANNALA_BRANDT4 as i32,
-    // Number of enumeration values. Not included.
-    //
-    // Count = sys::rs2_distortion_RS2_DISTORTION_COUNT
+    /* Number of enumeration values. Not included.
+     *
+     * Count = sys::rs2_distortion_RS2_DISTORTION_COUNT */
 }
 
 #[cfg(test)]

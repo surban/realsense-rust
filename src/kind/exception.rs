@@ -43,9 +43,9 @@ pub enum Rs2Exception {
         sys::rs2_exception_type_RS2_EXCEPTION_TYPE_DEVICE_IN_RECOVERY_MODE as i32,
     /// Error resulted because of an IO device failure.
     IoDeviceFailure = sys::rs2_exception_type_RS2_EXCEPTION_TYPE_IO as i32,
-    // Not included since this just tells us the total number of exceptions
-    //
-    // Count = sys::rs2_exception_type_RS2_EXCEPTION_TYPE_COUNT,
+    /* Not included since this just tells us the total number of exceptions
+     *
+     * Count = sys::rs2_exception_type_RS2_EXCEPTION_TYPE_COUNT, */
 }
 
 impl Display for Rs2Exception {

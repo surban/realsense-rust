@@ -68,7 +68,6 @@ impl CompositeFrame {
     /// * [`DisparityFrame`](crate::frame::DisparityFrame)
     /// * [`PoseFrame`](crate::frame::PoseFrame)
     /// * [`PointsFrame`](crate::frame::PointsFrame)
-    ///
     pub fn frames_of_type<F>(&self) -> Vec<F>
     where
         F: TryFrom<NonNull<sys::rs2_frame>> + FrameCategory,

@@ -121,7 +121,6 @@ pub trait FrameEx {
 /// Knowing these three things, you can uniquely describe any frame. We aim for our types to be
 /// categorically distinct. Unfortunately, all three of the data points above are not encoded in
 /// the type information for a frame in librealsense2, but are rather things we check at runtime.
-///
 pub trait FrameCategory {
     /// Identifies the corresponding [`Rs2Extension`] for the type implementing this trait.
     fn extension() -> Rs2Extension;

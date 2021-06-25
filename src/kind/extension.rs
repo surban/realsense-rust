@@ -87,7 +87,6 @@ use realsense_sys as sys;
 /// * [`Rs2Extension::Options`]
 /// * [`Rs2Extension::Video`]
 /// * [`Rs2Extension::Roi`]
-///
 #[repr(i32)]
 #[derive(FromPrimitive, ToPrimitive, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Rs2Extension {
@@ -153,9 +152,9 @@ pub enum Rs2Extension {
     FirmwareLogger = sys::rs2_extension_RS2_EXTENSION_FW_LOGGER as i32,
     DeviceCalibration = sys::rs2_extension_RS2_EXTENSION_DEVICE_CALIBRATION as i32,
     HdrMerge = sys::rs2_extension_RS2_EXTENSION_HDR_MERGE as i32,
-    // Not included since this just tells us the total number of extensions
-    //
-    // Count = sys::rs2_extension_RS2_EXTENSION_COUNT,
+    /* Not included since this just tells us the total number of extensions
+     *
+     * Count = sys::rs2_extension_RS2_EXTENSION_COUNT, */
 }
 
 pub const SENSOR_EXTENSIONS: [Rs2Extension; 12] = [

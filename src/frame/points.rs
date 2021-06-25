@@ -166,7 +166,6 @@ impl std::convert::TryFrom<NonNull<sys::rs2_frame>> for PointsFrame {
     /// - [`CouldNotGetData`](FrameConstructionError::CouldNotGetData)
     ///
     /// See [`FrameConstructionError`] documentation for more details.
-    ///
     fn try_from(frame_ptr: NonNull<sys::rs2_frame>) -> Result<Self, Self::Error> {
         unsafe {
             let mut err = ptr::null_mut::<sys::rs2_error>();
@@ -227,7 +226,6 @@ impl PointsFrame {
     /// `rs2_get_frame_texture_coordinates()` into a `texture_coordinate*`, thereby re-interpreting
     /// `[[c_int; 2]; N]` as `[[c_float; 2]; N]` values.  Note that C does not generally guarantee
     /// that `sizeof(int) == sizeof(float)`.
-    ///
     pub fn texture_coordinates(&self) -> &[[f32; 2]] {
         unsafe {
             slice::from_raw_parts::<[f32; 2]>(

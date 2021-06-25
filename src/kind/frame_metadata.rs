@@ -7,7 +7,6 @@ use realsense_sys as sys;
 ///
 /// Each key corresponds to a particular type of frame metadata. The librealsense2 C-API refers to
 /// these as `rs2_frame_metadata_value`; however these are clearly keys to metadata values.
-///
 #[repr(i32)]
 #[derive(FromPrimitive, ToPrimitive, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Rs2FrameMetadata {
@@ -123,7 +122,6 @@ pub enum Rs2FrameMetadata {
     /// * 1 - laser enabled.
     /// * 2 - auto laser enabled (opt).
     /// * 3 - LED enabled (opt).
-    ///
     FrameEmitterMode = sys::rs2_frame_metadata_value_RS2_FRAME_METADATA_FRAME_EMITTER_MODE as i32,
     /// Relative power of the LED emitter during frame capture.
     ///
@@ -139,9 +137,9 @@ pub enum Rs2FrameMetadata {
     SequenceIdentifier = sys::rs2_frame_metadata_value_RS2_FRAME_METADATA_SEQUENCE_ID as i32,
     /// Sub-preset sequence size
     SequenceSize = sys::rs2_frame_metadata_value_RS2_FRAME_METADATA_SEQUENCE_SIZE as i32,
-    // Not included since this just tells us the total number of metadata fields
-    //
-    // Count = sys::rs2_frame_metadata_value_RS2_FRAME_METADATA_COUNT,
+    /* Not included since this just tells us the total number of metadata fields
+     *
+     * Count = sys::rs2_frame_metadata_value_RS2_FRAME_METADATA_COUNT, */
 }
 
 #[cfg(test)]

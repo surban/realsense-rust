@@ -32,9 +32,9 @@ pub enum Rs2StreamKind {
     Pose = sys::rs2_stream_RS2_STREAM_POSE as i32,
     /// 4-bit per pixel depth confidence values
     Confidence = sys::rs2_stream_RS2_STREAM_CONFIDENCE as i32,
-    // Not included since this just tells us the total number stream types
-    //
-    // Count = sys::rs2_stream_RS2_STREAM_COUNT,
+    /* Not included since this just tells us the total number stream types
+     *
+     * Count = sys::rs2_stream_RS2_STREAM_COUNT, */
 }
 
 #[cfg(test)]

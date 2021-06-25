@@ -128,9 +128,7 @@
 ///
 ///     check_rs2_error!(err, MyError)?;
 /// }
-///
 /// ```
-///
 #[doc(hidden)]
 #[macro_export]
 macro_rules! check_rs2_error {

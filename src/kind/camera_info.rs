@@ -10,7 +10,6 @@ use realsense_sys as sys;
 ///
 /// All values that correspond to these keys are returned in the lower level API as `const char*`
 /// types, or C-strings. We wrap these values in the `realsense-rust` API as `&CStr` types.
-///
 #[repr(i32)]
 #[derive(FromPrimitive, ToPrimitive, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Rs2CameraInfo {
@@ -48,9 +47,9 @@ pub enum Rs2CameraInfo {
     FirmwareUpdateId = sys::rs2_camera_info_RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID as i32,
     /// IP address for remote camera.
     IpAddress = sys::rs2_camera_info_RS2_CAMERA_INFO_IP_ADDRESS as i32,
-    // Not included since this just tells us the total number of camera info options
-    //
-    // Count = sys::rs2_camera_info_RS2_CAMERA_INFO_COUNT,
+    /* Not included since this just tells us the total number of camera info options
+     *
+     * Count = sys::rs2_camera_info_RS2_CAMERA_INFO_COUNT, */
 }
 
 #[cfg(test)]

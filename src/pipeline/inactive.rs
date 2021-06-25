@@ -108,7 +108,6 @@ impl InactivePipeline {
     /// and if this configuration can be used it returns the pipeline profile (device and streams)
     /// that will be used as the active profile when the pipeline is started. Otherwise, if this
     /// configuration cannot resolve, this will return `None`.
-    ///
     pub fn resolve(&self, config: &Config) -> Option<PipelineProfile> {
         if !self.can_resolve(config) {
             return None;
@@ -139,7 +138,6 @@ impl InactivePipeline {
     ///
     /// Returns true iff the configuration can be satisfied and a pipeline profile can be
     /// constructed.
-    ///
     pub fn can_resolve(&self, config: &Config) -> bool {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();

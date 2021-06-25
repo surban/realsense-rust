@@ -55,7 +55,6 @@ impl DeviceHub {
     ///
     /// Returns [`DeviceConstructionError`](crate::device::DeviceConstructionError) if a device is
     /// found but an exception occurs during type construction.
-    ///
     pub fn wait_for_device(&self) -> Result<Device> {
         unsafe {
             let mut err = std::ptr::null_mut::<sys::rs2_error>();

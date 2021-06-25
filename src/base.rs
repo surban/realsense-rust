@@ -57,7 +57,6 @@ impl Rs2MotionDeviceIntrinsics {
     /// [ Scale X    | cross axis  | cross axis | Bias X ]
     /// [ cross axis | Scale Y     | cross axis | Bias Y ]
     /// [ cross axis | cross axis  | Scale Z    | Bias Z ]
-    ///
     pub fn data(&self) -> [[f32; 4usize]; 3usize] {
         self.0.data
     }
