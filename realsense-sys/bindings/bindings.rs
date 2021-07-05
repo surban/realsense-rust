@@ -13,10 +13,10 @@ pub const RS2_UNSIGNED_UPDATE_MODE_UPDATE: u32 = 0;
 pub const RS2_UNSIGNED_UPDATE_MODE_READ_ONLY: u32 = 1;
 pub const RS2_UNSIGNED_UPDATE_MODE_FULL: u32 = 2;
 pub const RS2_API_MAJOR_VERSION: u32 = 2;
-pub const RS2_API_MINOR_VERSION: u32 = 47;
+pub const RS2_API_MINOR_VERSION: u32 = 48;
 pub const RS2_API_PATCH_VERSION: u32 = 0;
 pub const RS2_API_BUILD_VERSION: u32 = 0;
-pub const RS2_API_VERSION: u32 = 24700;
+pub const RS2_API_VERSION: u32 = 24800;
 pub const RS2_DEFAULT_TIMEOUT: u32 = 15000;
 #[doc = "< Frames didn't arrived within 5 seconds"]
 pub const rs2_notification_category_RS2_NOTIFICATION_CATEGORY_FRAMES_TIMEOUT:
